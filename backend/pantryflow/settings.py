@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'core',
     'pantry',
     'planning',
+    'meals',
 ]
 
 MIDDLEWARE = [
