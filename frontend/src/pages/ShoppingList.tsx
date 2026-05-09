@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { getShoppingNotes, type AiResponse } from '../api/aiApi'
 import {
   generateShoppingList,
   getShoppingList,
@@ -33,6 +34,9 @@ function ShoppingList() {
   const [totals, setTotals] = useState<ShoppingTotals | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [aiNote, setAiNote] = useState<AiResponse | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
 
   const loadList = async () => {
     setLoading(true)
@@ -56,6 +60,8 @@ function ShoppingList() {
   const handleGenerate = async () => {
     setLoading(true)
     setError(null)
+    setAiNote(null)
+    setAiError(null)
     try {
       const response = await generateShoppingList()
       setItems(response.items)
@@ -82,6 +88,20 @@ function ShoppingList() {
     }
   }
 
+  const handleAiNotes = async () => {
+    setAiLoading(true)
+    setAiError(null)
+    try {
+      const response = await getShoppingNotes(items, totals)
+      setAiNote(response)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'AI notes failed.'
+      setAiError(message)
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
   const currency = totals?.currency || 'USD'
 
   return (
@@ -103,6 +123,9 @@ function ShoppingList() {
             <button type="button" className="button ghost" onClick={loadList}>
               Refresh
             </button>
+            <button type="button" className="button ghost" onClick={handleAiNotes}>
+              {aiLoading ? 'Loading notes...' : 'AI notes'}
+            </button>
             <button type="button" className="button" onClick={handleGenerate}>
               Generate list
             </button>
@@ -119,6 +142,17 @@ function ShoppingList() {
             <strong>{formatCurrency(totals?.budget_remaining, currency)}</strong>
           </div>
         </div>
+
+        {aiError ? <p className="ai-status ai-error">{aiError}</p> : null}
+        {aiNote ? (
+          <div className="ai-panel">
+            <p>{aiNote.message}</p>
+            <span className="ai-meta">
+              Source: {aiNote.source}
+              {aiNote.fallback ? ' (fallback)' : ''}
+            </span>
+          </div>
+        ) : null}
 
         {error ? <p className="status status-error">{error}</p> : null}
         {loading ? <p className="status status-wait">Loading list...</p> : null}

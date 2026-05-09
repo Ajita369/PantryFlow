@@ -23,4 +23,6 @@ urlpatterns = [
     path('api/', include('pantry.urls')),
     path('api/', include('planning.urls')),
     path('api/', include('meals.urls')),
+    path('api/', include('ai_service.urls')),
+    path('api/', include('planner.urls')),
 ]

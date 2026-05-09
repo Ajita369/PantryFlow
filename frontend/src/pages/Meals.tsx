@@ -1,4 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import {
+  getMealExplanation,
+  getSubstitutionHelp,
+  type AiResponse,
+} from '../api/aiApi'
 import {
   getMealSuggestions,
   type MealSuggestion,
@@ -6,7 +11,29 @@ import {
   type UrgentItem,
 } from '../api/mealsApi'
 
-function MealCard({ meal }: { meal: MealSuggestion }) {
+type AiNoteState = {
+  message?: string
+  error?: string
+  loading?: boolean
+  source?: string
+  fallback?: boolean
+}
+
+type MealCardProps = {
+  meal: MealSuggestion
+  noteState?: AiNoteState
+  substitutionState?: AiNoteState
+  onMealNote: (meal: MealSuggestion) => void
+  onSubstitutionNote: (meal: MealSuggestion) => void
+}
+
+function MealCard({
+  meal,
+  noteState,
+  substitutionState,
+  onMealNote,
+  onSubstitutionNote,
+}: MealCardProps) {
   return (
     <article className="meal-card">
       <div className="meal-header">
@@ -65,6 +92,50 @@ function MealCard({ meal }: { meal: MealSuggestion }) {
           </ul>
         </div>
       ) : null}
+      <div className="meal-actions">
+        <button
+          type="button"
+          className="button ghost"
+          onClick={() => onMealNote(meal)}
+        >
+          Meal note
+        </button>
+        {meal.missing_ingredients.length ? (
+          <button
+            type="button"
+            className="button ghost"
+            onClick={() => onSubstitutionNote(meal)}
+          >
+            Substitution help
+          </button>
+        ) : null}
+      </div>
+      {noteState?.loading ? (
+        <p className="ai-status">Loading meal note...</p>
+      ) : noteState?.error ? (
+        <p className="ai-status ai-error">{noteState.error}</p>
+      ) : noteState?.message ? (
+        <div className="ai-panel">
+          <p>{noteState.message}</p>
+          <span className="ai-meta">
+            Source: {noteState.source}
+            {noteState.fallback ? ' (fallback)' : ''}
+          </span>
+        </div>
+      ) : null}
+      {substitutionState?.loading ? (
+        <p className="ai-status">Loading substitution help...</p>
+      ) : substitutionState?.error ? (
+        <p className="ai-status ai-error">{substitutionState.error}</p>
+      ) : substitutionState?.message ? (
+        <div className="ai-panel">
+          <p>{substitutionState.message}</p>
+          <span className="ai-meta">
+            Source: {substitutionState.source}
+            {substitutionState.fallback ? ' (fallback)' : ''}
+          </span>
+        </div>
+      ) : null}
     </article>
   )
 }
@@ -87,6 +158,8 @@ function Meals() {
   const [data, setData] = useState<MealSuggestionsResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [mealNotes, setMealNotes] = useState<Record<number, AiNoteState>>({})
+  const [subNotes, setSubNotes] = useState<Record<number, AiNoteState>>({})
 
   const loadSuggestions = async () => {
     setLoading(true)
@@ -105,6 +178,44 @@ function Meals() {
   useEffect(() => {
     loadSuggestions()
   }, [])
+
+  const updateNoteState = (
+    setter: Dispatch<SetStateAction<Record<number, AiNoteState>>>,
+    mealId: number,
+    next: AiNoteState
+  ) => {
+    setter((prev) => ({ ...prev, [mealId]: next }))
+  }
+
+  const requestMealNote = async (meal: MealSuggestion) => {
+    updateNoteState(setMealNotes, meal.id, { loading: true })
+    try {
+      const response: AiResponse = await getMealExplanation(meal)
+      updateNoteState(setMealNotes, meal.id, {
+        message: response.message,
+        source: response.source,
+        fallback: response.fallback,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'AI note failed.'
+      updateNoteState(setMealNotes, meal.id, { error: message })
+    }
+  }
+
+  const requestSubNote = async (meal: MealSuggestion) => {
+    updateNoteState(setSubNotes, meal.id, { loading: true })
+    try {
+      const response: AiResponse = await getSubstitutionHelp(meal)
+      updateNoteState(setSubNotes, meal.id, {
+        message: response.message,
+        source: response.source,
+        fallback: response.fallback,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'AI help failed.'
+      updateNoteState(setSubNotes, meal.id, { error: message })
+    }
+  }
 
   return (
     <section className="page">
@@ -144,7 +255,16 @@ function Meals() {
         <h2>Cook today</h2>
         <div className="meals-grid">
           {data?.meals.cook_today.length ? (
-            data.meals.cook_today.map((meal) => <MealCard key={meal.id} meal={meal} />)
+            data.meals.cook_today.map((meal) => (
+              <MealCard
+                key={meal.id}
+                meal={meal}
+                noteState={mealNotes[meal.id]}
+                substitutionState={subNotes[meal.id]}
+                onMealNote={requestMealNote}
+                onSubstitutionNote={requestSubNote}
+              />
+            ))
           ) : (
             <p className="empty">No meals ready for today.</p>
           )}
@@ -156,7 +276,14 @@ function Meals() {
         <div className="meals-grid">
           {data?.meals.cook_this_week.length ? (
             data.meals.cook_this_week.map((meal) => (
-              <MealCard key={meal.id} meal={meal} />
+              <MealCard
+                key={meal.id}
+                meal={meal}
+                noteState={mealNotes[meal.id]}
+                substitutionState={subNotes[meal.id]}
+                onMealNote={requestMealNote}
+                onSubstitutionNote={requestSubNote}
+              />
             ))
           ) : (
             <p className="empty">No weekly matches yet.</p>
@@ -169,7 +296,14 @@ function Meals() {
         <div className="meals-grid">
           {data?.meals.possible_later.length ? (
             data.meals.possible_later.map((meal) => (
-              <MealCard key={meal.id} meal={meal} />
+              <MealCard
+                key={meal.id}
+                meal={meal}
+                noteState={mealNotes[meal.id]}
+                substitutionState={subNotes[meal.id]}
+                onMealNote={requestMealNote}
+                onSubstitutionNote={requestSubNote}
+              />
             ))
           ) : (
             <p className="empty">No ideas queued yet.</p>
