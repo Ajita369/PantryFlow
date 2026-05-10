@@ -1,5 +1,6 @@
 import type { MealSuggestion } from './mealsApi'
 import type { ShoppingListItem, ShoppingTotals } from './planningApi'
+import { authFetch } from './authApi'
 
 export type AiResponse = {
   message: string
@@ -16,7 +17,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export async function getMealExplanation(meal: MealSuggestion) {
-  const response = await fetch('/api/ai/meal-explanation/', {
+  const response = await authFetch('/api/ai/meal-explanation/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -31,7 +32,7 @@ export async function getMealExplanation(meal: MealSuggestion) {
 }
 
 export async function getSubstitutionHelp(meal: MealSuggestion) {
-  const response = await fetch('/api/ai/substitution/', {
+  const response = await authFetch('/api/ai/substitution/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -46,7 +47,7 @@ export async function getShoppingNotes(
   items: ShoppingListItem[],
   totals: ShoppingTotals | null
 ) {
-  const response = await fetch('/api/ai/shopping-notes/', {
+  const response = await authFetch('/api/ai/shopping-notes/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

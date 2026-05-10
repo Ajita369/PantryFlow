@@ -40,8 +40,12 @@ PERISHABLE_CATEGORIES = {
 DEFAULT_PRICE = Decimal('3.00')
 
 
-def current_budget() -> WeeklyBudget | None:
-	return WeeklyBudget.objects.order_by('-week_start_date', '-created_at').first()
+def current_budget(user) -> WeeklyBudget | None:
+	return (
+		WeeklyBudget.objects.filter(user=user)
+		.order_by('-week_start_date', '-created_at')
+		.first()
+	)
 
 
 def estimate_price(category: str) -> Decimal:
@@ -157,7 +161,7 @@ def apply_budget(
 
 class BudgetView(APIView):
 	def get(self, request):
-		budget = current_budget()
+		budget = current_budget(request.user)
 		if not budget:
 			return Response({'budget': None})
 
@@ -165,14 +169,14 @@ class BudgetView(APIView):
 		return Response({'budget': serializer.data})
 
 	def post(self, request):
-		budget = current_budget()
+		budget = current_budget(request.user)
 		serializer = WeeklyBudgetSerializer(
 			instance=budget,
 			data=request.data,
 			partial=budget is not None,
 		)
 		serializer.is_valid(raise_exception=True)
-		saved = serializer.save()
+		saved = serializer.save(user=request.user)
 		return Response({'budget': WeeklyBudgetSerializer(saved).data})
 
 	def put(self, request):
@@ -183,24 +187,29 @@ class ShoppingListViewSet(mixins.ListModelMixin, mixins.UpdateModelMixin, viewse
 	serializer_class = ShoppingListItemSerializer
 	queryset = ShoppingListItem.objects.all()
 
+	def get_queryset(self):
+		return ShoppingListItem.objects.filter(user=self.request.user)
+
 	def list(self, request, *args, **kwargs):
 		items = self.get_queryset()
 		serializer = self.get_serializer(items, many=True)
-		totals = calculate_totals(items, current_budget())
+		totals = calculate_totals(items, current_budget(request.user))
 		return Response({'items': serializer.data, 'totals': totals})
 
 	@action(detail=False, methods=['post'], url_path='generate')
 	def generate(self, request):
-		pantry_items = PantryItem.objects.all()
-		budget = current_budget()
+		pantry_items = PantryItem.objects.filter(user=request.user)
+		budget = current_budget(request.user)
 		candidates = build_shopping_candidates(pantry_items)
 		selected = apply_budget(candidates, budget)
+		for item in selected:
+			item.user = request.user
 
 		with transaction.atomic():
-			ShoppingListItem.objects.all().delete()
+			ShoppingListItem.objects.filter(user=request.user).delete()
 			ShoppingListItem.objects.bulk_create(selected)
 
-		items = ShoppingListItem.objects.all()
+		items = self.get_queryset()
 		serializer = self.get_serializer(items, many=True)
 		totals = calculate_totals(items, budget)
 		return Response({'items': serializer.data, 'totals': totals})

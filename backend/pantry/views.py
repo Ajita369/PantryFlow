@@ -14,7 +14,7 @@ class PantryItemViewSet(viewsets.ModelViewSet):
 	serializer_class = PantryItemSerializer
 
 	def get_queryset(self):
-		queryset = PantryItem.objects.all()
+		queryset = PantryItem.objects.filter(user=self.request.user)
 		category = self.request.query_params.get('category')
 		search = self.request.query_params.get('search')
 
@@ -28,6 +28,9 @@ class PantryItemViewSet(viewsets.ModelViewSet):
 			)
 
 		return queryset.order_by('expiry_date', 'name')
+
+	def perform_create(self, serializer):
+		serializer.save(user=self.request.user)
 
 	@action(detail=False, methods=['get'], url_path='expired')
 	def expired(self, request):
@@ -59,7 +62,7 @@ class PantryItemViewSet(viewsets.ModelViewSet):
 		if not term:
 			return Response([])
 
-		queryset = PantryItem.objects.filter(
+		queryset = self.get_queryset().filter(
 			Q(name__icontains=term) | Q(category__icontains=term)
 		).order_by('expiry_date', 'name')
 		serializer = self.get_serializer(queryset, many=True)

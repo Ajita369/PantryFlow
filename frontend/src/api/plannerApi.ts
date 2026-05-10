@@ -1,4 +1,5 @@
 import type { AiResponse } from './aiApi'
+import { authFetch } from './authApi'
 import type { MealSuggestion, UrgentItem } from './mealsApi'
 import type { ShoppingTotals, WeeklyBudget } from './planningApi'
 
@@ -39,6 +40,6 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export async function getWeeklyPlan() {
-  const response = await fetch('/api/plan-week/')
+  const response = await authFetch('/api/plan-week/')
   return handleResponse<PlanResponse>(response)
 }

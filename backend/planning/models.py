@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
 
@@ -5,6 +6,11 @@ from pantry.models import PantryItem
 
 
 class WeeklyBudget(models.Model):
+	user = models.ForeignKey(
+		settings.AUTH_USER_MODEL,
+		on_delete=models.CASCADE,
+		related_name='weekly_budgets',
+	)
 	weekly_budget_amount = models.DecimalField(
 		max_digits=10,
 		decimal_places=2,
@@ -30,6 +36,11 @@ class ShoppingListItem(models.Model):
 		LOW = 3, 'Low'
 
 	name = models.CharField(max_length=120)
+	user = models.ForeignKey(
+		settings.AUTH_USER_MODEL,
+		on_delete=models.CASCADE,
+		related_name='shopping_list_items',
+	)
 	estimated_price = models.DecimalField(
 		max_digits=8,
 		decimal_places=2,

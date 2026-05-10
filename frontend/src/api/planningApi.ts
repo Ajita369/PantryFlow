@@ -1,3 +1,5 @@
+import { authFetch } from './authApi'
+
 export type WeeklyBudget = {
   id: number
   weekly_budget_amount: string
@@ -52,12 +54,12 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export async function getBudget() {
-  const response = await fetch('/api/budget/')
+  const response = await authFetch('/api/budget/')
   return handleResponse<BudgetResponse>(response)
 }
 
 export async function saveBudget(payload: BudgetInput) {
-  const response = await fetch('/api/budget/', {
+  const response = await authFetch('/api/budget/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -66,12 +68,12 @@ export async function saveBudget(payload: BudgetInput) {
 }
 
 export async function getShoppingList() {
-  const response = await fetch('/api/shopping-list/')
+  const response = await authFetch('/api/shopping-list/')
   return handleResponse<ShoppingListResponse>(response)
 }
 
 export async function generateShoppingList() {
-  const response = await fetch('/api/shopping-list/generate/', {
+  const response = await authFetch('/api/shopping-list/generate/', {
     method: 'POST',
   })
   return handleResponse<ShoppingListResponse>(response)
@@ -81,7 +83,7 @@ export async function updateShoppingItem(
   id: number,
   payload: Partial<Pick<ShoppingListItem, 'is_needed' | 'priority'>>
 ) {
-  const response = await fetch(`/api/shopping-list/${id}/`, {
+  const response = await authFetch(`/api/shopping-list/${id}/`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

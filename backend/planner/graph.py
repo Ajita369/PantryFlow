@@ -19,6 +19,7 @@ from planning.views import (
 
 
 class PlanState(TypedDict, total=False):
+    user: object
     pantry_models: list[PantryItem]
     pantry_payload: list[dict]
     budget_model: WeeklyBudget | None
@@ -50,8 +51,9 @@ def serialize_budget(budget: WeeklyBudget | None):
 
 
 def load_data(state: PlanState) -> PlanState:
-    pantry_models = list(PantryItem.objects.all())
-    budget_model = current_budget()
+    user = state.get('user')
+    pantry_models = list(PantryItem.objects.filter(user=user))
+    budget_model = current_budget(user)
     pantry_payload = [
         {
             'id': item.id,
@@ -222,8 +224,8 @@ def build_plan_graph():
 GRAPH = build_plan_graph()
 
 
-def run_weekly_plan() -> dict:
-    result = GRAPH.invoke({})
+def run_weekly_plan(user) -> dict:
+    result = GRAPH.invoke({'user': user})
     return {
         'generated_at': result.get('generated_at', datetime.utcnow().isoformat()),
         'tasks': result.get('tasks', []),

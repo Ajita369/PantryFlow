@@ -1,3 +1,5 @@
+import { authFetch } from './authApi'
+
 export type PantryItem = {
   id: number
   name: string
@@ -48,12 +50,12 @@ export async function listPantryItems(filters: PantryListFilters = {}) {
   }
 
   const url = params.toString() ? `${baseUrl}?${params}` : baseUrl
-  const response = await fetch(url)
+  const response = await authFetch(url)
   return handleResponse<PantryItem[]>(response)
 }
 
 export async function createPantryItem(payload: PantryItemInput) {
-  const response = await fetch(baseUrl, {
+  const response = await authFetch(baseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -62,7 +64,7 @@ export async function createPantryItem(payload: PantryItemInput) {
 }
 
 export async function updatePantryItem(id: number, payload: PantryItemInput) {
-  const response = await fetch(`${baseUrl}${id}/`, {
+  const response = await authFetch(`${baseUrl}${id}/`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -71,7 +73,7 @@ export async function updatePantryItem(id: number, payload: PantryItemInput) {
 }
 
 export async function deletePantryItem(id: number) {
-  const response = await fetch(`${baseUrl}${id}/`, {
+  const response = await authFetch(`${baseUrl}${id}/`, {
     method: 'DELETE',
   })
   if (!response.ok) {

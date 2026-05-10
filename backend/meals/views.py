@@ -252,7 +252,7 @@ def build_meal_groups(pantry_items, urgent_names):
 
 @api_view(['GET'])
 def meal_suggestions(request):
-	pantry_items = PantryItem.objects.all()
+	pantry_items = PantryItem.objects.filter(user=request.user)
 	urgent_items = build_urgent_items(pantry_items)
 	urgent_names = {normalize(item['name']) for item in urgent_items if item['urgency_score'] >= 60}
 

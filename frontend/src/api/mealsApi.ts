@@ -1,3 +1,5 @@
+import { authFetch } from './authApi'
+
 export type UrgentItem = {
   id: number
   name: string
@@ -41,6 +43,6 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export async function getMealSuggestions() {
-  const response = await fetch('/api/meals/suggestions/')
+  const response = await authFetch('/api/meals/suggestions/')
   return handleResponse<MealSuggestionsResponse>(response)
 }
