@@ -213,3 +213,43 @@ class ShoppingListViewSet(mixins.ListModelMixin, mixins.UpdateModelMixin, viewse
 		serializer = self.get_serializer(items, many=True)
 		totals = calculate_totals(items, budget)
 		return Response({'items': serializer.data, 'totals': totals})
+
+	@action(detail=False, methods=['post'], url_path='add-items')
+	def add_items(self, request):
+		raw_items = request.data.get('items', [])
+		if not isinstance(raw_items, list):
+			raw_items = []
+
+		names = []
+		for item in raw_items:
+			name = str(item).strip()
+			if name and name.lower() not in {entry.lower() for entry in names}:
+				names.append(name)
+
+		for name in names:
+			existing = ShoppingListItem.objects.filter(
+				user=request.user,
+				name__iexact=name,
+			).first()
+			if existing:
+				if not existing.is_needed:
+					existing.is_needed = True
+					existing.reason = 'Needed for a selected meal.'
+					existing.save(update_fields=['is_needed', 'reason', 'updated_at'])
+				continue
+
+			ShoppingListItem.objects.create(
+				user=request.user,
+				name=name,
+				estimated_price=DEFAULT_PRICE,
+				quantity=Decimal('1.00'),
+				unit='item',
+				priority=ShoppingListItem.Priority.MEDIUM,
+				is_needed=True,
+				reason='Needed for a selected meal.',
+			)
+
+		items = self.get_queryset()
+		serializer = self.get_serializer(items, many=True)
+		totals = calculate_totals(items, current_budget(request.user))
+		return Response({'items': serializer.data, 'totals': totals})

@@ -79,6 +79,15 @@ export async function generateShoppingList() {
   return handleResponse<ShoppingListResponse>(response)
 }
 
+export async function addShoppingItems(items: string[]) {
+  const response = await authFetch('/api/shopping-list/add-items/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items }),
+  })
+  return handleResponse<ShoppingListResponse>(response)
+}
+
 export async function updateShoppingItem(
   id: number,
   payload: Partial<Pick<ShoppingListItem, 'is_needed' | 'priority'>>

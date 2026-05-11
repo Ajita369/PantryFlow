@@ -36,6 +36,8 @@ type LoginResponse = {
 
 const ACCESS_TOKEN_KEY = 'pf_access_token'
 const REFRESH_TOKEN_KEY = 'pf_refresh_token'
+const AUTH_EXPIRED_EVENT = 'pf-auth-expired'
+const TOKEN_REFRESH_WINDOW_SECONDS = 30
 
 export function getAccessToken() {
   return localStorage.getItem(ACCESS_TOKEN_KEY)
@@ -53,6 +55,41 @@ export function setTokens(tokens: AuthTokens) {
 export function clearTokens() {
   localStorage.removeItem(ACCESS_TOKEN_KEY)
   localStorage.removeItem(REFRESH_TOKEN_KEY)
+}
+
+export function notifyAuthExpired() {
+  window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT))
+}
+
+export function onAuthExpired(callback: () => void) {
+  window.addEventListener(AUTH_EXPIRED_EVENT, callback)
+  return () => window.removeEventListener(AUTH_EXPIRED_EVENT, callback)
+}
+
+function getTokenExpiry(token: string | null) {
+  if (!token) {
+    return null
+  }
+
+  try {
+    const [, payload] = token.split('.')
+    if (!payload) {
+      return null
+    }
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const decoded = JSON.parse(atob(normalized)) as { exp?: number }
+    return decoded.exp ?? null
+  } catch {
+    return null
+  }
+}
+
+function isTokenExpiring(token: string | null) {
+  const expiry = getTokenExpiry(token)
+  if (!expiry) {
+    return false
+  }
+  return expiry <= Math.floor(Date.now() / 1000) + TOKEN_REFRESH_WINDOW_SECONDS
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -77,6 +114,7 @@ async function refreshAccessToken() {
 
   if (!response.ok) {
     clearTokens()
+    notifyAuthExpired()
     return null
   }
 
@@ -94,7 +132,11 @@ function withAuthHeaders(init: RequestInit, accessToken: string | null) {
 }
 
 export async function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
-  const accessToken = getAccessToken()
+  let accessToken = getAccessToken()
+  if (isTokenExpiring(accessToken)) {
+    accessToken = await refreshAccessToken()
+  }
+
   const response = await fetch(input, withAuthHeaders(init, accessToken))
   if (response.status !== 401) {
     return response
@@ -107,6 +149,7 @@ export async function authFetch(input: RequestInfo | URL, init: RequestInit = {}
 
   const refreshed = await refreshAccessToken()
   if (!refreshed) {
+    notifyAuthExpired()
     return response
   }
 

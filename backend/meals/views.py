@@ -9,6 +9,8 @@ from rest_framework.response import Response
 
 from pantry.models import PantryItem
 
+from .generator import generate_meal_candidates
+
 MEAL_TEMPLATES = [
 	{
 		'id': 1,
@@ -96,6 +98,10 @@ INGREDIENT_CATEGORY_MAP = {
 	'pasta': 'grains',
 	'oats': 'grains',
 }
+
+MIN_COOK_TODAY = 1
+MIN_COOK_THIS_WEEK = 2
+MAX_POSSIBLE_LATER = 3
 
 
 def normalize(text: str) -> str:
@@ -196,17 +202,55 @@ def substitution_candidates(missing: str, pantry_items):
 	return unique
 
 
-def build_meal_groups(pantry_items, urgent_names):
+def meal_rank(meal):
+	return (
+		-meal['match_score'],
+		len(meal['missing_ingredients']),
+		meal['estimated_time_minutes'],
+		meal['title'],
+	)
+
+
+def rebalance_meal_groups(groups):
+	cook_today = sorted(groups['cook_today'], key=meal_rank)
+	cook_this_week = sorted(groups['cook_this_week'], key=meal_rank)
+	possible_later = sorted(groups['possible_later'], key=meal_rank)
+
+	while len(cook_today) < MIN_COOK_TODAY and (cook_this_week or possible_later):
+		source = cook_this_week if cook_this_week else possible_later
+		cook_today.append(source.pop(0))
+
+	while len(cook_this_week) < MIN_COOK_THIS_WEEK and possible_later:
+		cook_this_week.append(possible_later.pop(0))
+
+	while len(cook_this_week) < MIN_COOK_THIS_WEEK and len(cook_today) > MIN_COOK_TODAY:
+		cook_this_week.append(cook_today.pop())
+
+	return {
+		'cook_today': sorted(cook_today, key=meal_rank),
+		'cook_this_week': sorted(cook_this_week, key=meal_rank),
+		'possible_later': sorted(possible_later, key=meal_rank)[:MAX_POSSIBLE_LATER],
+	}
+
+
+def build_meal_groups(pantry_items, urgent_names, meal_candidates=None, source: str = 'templates'):
 	cook_today = []
 	cook_this_week = []
 	possible_later = []
 
-	for template in MEAL_TEMPLATES:
+	if meal_candidates is None:
+		meal_candidates = MEAL_TEMPLATES
+		source = 'templates'
+
+	for index, template in enumerate(meal_candidates):
+		ingredients = template.get('ingredients') or []
+		if not ingredients:
+			continue
 		matched = []
 		missing = []
 		substitutions = {}
 
-		for ingredient in template['ingredients']:
+		for ingredient in ingredients:
 			match = None
 			for item in pantry_items:
 				if ingredient_matches(ingredient, item['name']):
@@ -219,21 +263,23 @@ def build_meal_groups(pantry_items, urgent_names):
 				missing.append(ingredient)
 				substitutions[ingredient] = substitution_candidates(ingredient, pantry_items)
 
-		match_score = len(matched) / len(template['ingredients'])
+		match_score = len(matched) / len(ingredients)
 		if any(name in urgent_names for name in matched):
 			match_score = min(1.0, match_score + 0.1)
 
 		meal_payload = {
-			'id': template['id'],
-			'title': template['title'],
-			'description': template['description'],
-			'cuisine_type': template['cuisine_type'],
-			'estimated_cost': template['estimated_cost'],
-			'estimated_time_minutes': template['estimated_time_minutes'],
+			'id': template.get('id', index + 1),
+			'title': template.get('title', ''),
+			'description': template.get('description', ''),
+			'cuisine_type': template.get('cuisine_type', ''),
+			'estimated_cost': template.get('estimated_cost', 0),
+			'estimated_time_minutes': template.get('estimated_time_minutes', 0),
+			'steps': template.get('steps', []),
 			'matched_ingredients': matched,
 			'missing_ingredients': missing,
 			'substitutions': substitutions,
 			'match_score': round(match_score, 2),
+			'source': source,
 		}
 
 		if match_score >= 0.75 and len(missing) <= 1:
@@ -243,11 +289,20 @@ def build_meal_groups(pantry_items, urgent_names):
 		else:
 			possible_later.append(meal_payload)
 
-	return {
+	return rebalance_meal_groups({
 		'cook_today': cook_today,
 		'cook_this_week': cook_this_week,
 		'possible_later': possible_later,
-	}
+	})
+
+
+def select_meal_candidates(pantry_payload: list[dict]):
+	candidates, error = generate_meal_candidates(pantry_payload)
+	if candidates:
+		return candidates, 'llm', None
+	if error:
+		error = 'AI meal generation is unavailable right now, so template meals are shown.'
+	return MEAL_TEMPLATES, 'templates', error
 
 
 @api_view(['GET'])
@@ -269,12 +324,48 @@ def meal_suggestions(request):
 		for item in pantry_items
 	]
 
-	meals = build_meal_groups(pantry_payload, urgent_names)
+	meal_candidates, source, llm_error = select_meal_candidates(pantry_payload)
+	meals = build_meal_groups(pantry_payload, urgent_names, meal_candidates, source)
 
 	return Response(
 		{
 			'urgent_items': urgent_items,
 			'meals': meals,
+			'source': source,
+			'llm_error': llm_error,
+			'generated_at': timezone.now().isoformat(),
+		}
+	)
+
+
+@api_view(['POST'])
+def generate_meals(request):
+	pantry_items = PantryItem.objects.filter(user=request.user)
+	urgent_items = build_urgent_items(pantry_items)
+	urgent_names = {normalize(item['name']) for item in urgent_items if item['urgency_score'] >= 60}
+
+	pantry_payload = [
+		{
+			'id': item.id,
+			'name': item.name,
+			'name_norm': normalize(item.name),
+			'category': item.category or '',
+			'quantity': str(item.quantity),
+			'unit': item.unit,
+			'expiry_date': item.expiry_date,
+		}
+		for item in pantry_items
+	]
+
+	meal_candidates, source, llm_error = select_meal_candidates(pantry_payload)
+	meals = build_meal_groups(pantry_payload, urgent_names, meal_candidates, source)
+
+	return Response(
+		{
+			'urgent_items': urgent_items,
+			'meals': meals,
+			'source': source,
+			'llm_error': llm_error,
 			'generated_at': timezone.now().isoformat(),
 		}
 	)

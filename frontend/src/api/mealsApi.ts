@@ -18,10 +18,12 @@ export type MealSuggestion = {
   cuisine_type: string
   estimated_cost: number
   estimated_time_minutes: number
+  steps: string[]
   matched_ingredients: string[]
   missing_ingredients: string[]
   substitutions: Record<string, string[]>
   match_score: number
+  source: string
 }
 
 export type MealSuggestionsResponse = {
@@ -31,6 +33,8 @@ export type MealSuggestionsResponse = {
     cook_this_week: MealSuggestion[]
     possible_later: MealSuggestion[]
   }
+  source: string
+  llm_error?: string | null
   generated_at: string
 }
 
@@ -44,5 +48,12 @@ async function handleResponse<T>(response: Response): Promise<T> {
 
 export async function getMealSuggestions() {
   const response = await authFetch('/api/meals/suggestions/')
+  return handleResponse<MealSuggestionsResponse>(response)
+}
+
+export async function generateMeals() {
+  const response = await authFetch('/api/meals/generate/', {
+    method: 'POST',
+  })
   return handleResponse<MealSuggestionsResponse>(response)
 }

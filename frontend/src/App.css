@@ -267,6 +267,11 @@
   border: 1px solid rgba(184, 64, 64, 0.3);
 }
 
+.button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .toolbar {
   display: flex;
   align-items: flex-end;
@@ -471,6 +476,33 @@
   gap: 12px;
 }
 
+.meal-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.meal-source {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--muted);
+}
+
+.meal-source-llm {
+  background: rgba(31, 125, 185, 0.16);
+  color: #1f5f8f;
+}
+
+.meal-source-templates {
+  background: rgba(27, 125, 79, 0.14);
+  color: #1b7d4f;
+}
+
 .meal-score {
   font-size: 12px;
   padding: 6px 10px;
@@ -535,6 +567,24 @@
   gap: 6px;
 }
 
+.shopping-hint {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(219, 139, 45, 0.1);
+  color: #7d4307;
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.shopping-hint p {
+  margin: 0;
+}
+
+.shopping-hint .button {
+  justify-self: start;
+}
+
 .urgent-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -561,6 +611,25 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.meal-steps {
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  padding-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.meal-steps summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.meal-steps ol {
+  margin: 8px 0 0 18px;
+  display: grid;
+  gap: 6px;
 }
 
 .ai-panel {

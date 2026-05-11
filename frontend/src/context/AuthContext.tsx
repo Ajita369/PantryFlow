@@ -4,6 +4,7 @@ import {
   getMe,
   login,
   logout,
+  onAuthExpired,
   register,
   type AuthUser,
   type LoginPayload,
@@ -53,6 +54,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     bootstrap()
+  }, [])
+
+  useEffect(() => {
+    return onAuthExpired(() => {
+      clearTokens()
+      setUser(null)
+    })
   }, [])
 
   const handleLogin = async (payload: LoginPayload) => {
