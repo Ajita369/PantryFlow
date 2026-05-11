@@ -202,6 +202,20 @@ function Meals() {
   const [subNotes, setSubNotes] = useState<Record<number, AiNoteState>>({})
   const [shoppingNotes, setShoppingNotes] = useState<Record<number, AiNoteState>>({})
 
+  const formatGeneratedAt = (value?: string) => {
+    if (!value) {
+      return 'Not generated yet'
+    }
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) {
+      return value
+    }
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(date)
+  }
+
   const loadSuggestions = async () => {
     setLoading(true)
     setError(null)
@@ -297,12 +311,23 @@ function Meals() {
           <div>
             <h2>Items to use first</h2>
             <p className="muted">Urgency scores based on expiry and stock.</p>
+            {data ? (
+              <p className="muted">
+                Last generated: {formatGeneratedAt(data.generated_at)}
+                {data.cached ? ' (cached)' : ''}
+              </p>
+            ) : null}
           </div>
           <div className="toolbar-group">
             <button type="button" className="button ghost" onClick={loadSuggestions}>
               Refresh
             </button>
-            <button type="button" className="button" onClick={handleGenerate}>
+            <button
+              type="button"
+              className="button"
+              onClick={handleGenerate}
+              disabled={generating}
+            >
               {generating ? 'Generating...' : 'Generate new meals'}
             </button>
           </div>
@@ -311,6 +336,19 @@ function Meals() {
         {error ? <p className="status status-error">{error}</p> : null}
         {data?.llm_error ? (
           <p className="status status-warn">LLM fallback: {data.llm_error}</p>
+        ) : null}
+        {data?.pantry_changed ? (
+          <div className="status status-warn">
+            <span>Pantry updated since the last generation.</span>
+            <button
+              type="button"
+              className="button ghost"
+              onClick={handleGenerate}
+              disabled={generating}
+            >
+              Regenerate now
+            </button>
+          </div>
         ) : null}
         {loading ? <p className="status status-wait">Loading suggestions...</p> : null}
 

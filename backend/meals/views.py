@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
+from django.db import transaction
 from django.utils import timezone
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from pantry.models import PantryItem
 
+from .cache import compute_pantry_hash, get_cached_meals, invalidate_meals
 from .generator import generate_meal_candidates
+from .models import GeneratedMeal, GeneratedMealSet
 
 MEAL_TEMPLATES = [
 	{
@@ -274,6 +277,7 @@ def build_meal_groups(pantry_items, urgent_names, meal_candidates=None, source: 
 			'cuisine_type': template.get('cuisine_type', ''),
 			'estimated_cost': template.get('estimated_cost', 0),
 			'estimated_time_minutes': template.get('estimated_time_minutes', 0),
+			'ingredients': ingredients,
 			'steps': template.get('steps', []),
 			'matched_ingredients': matched,
 			'missing_ingredients': missing,
@@ -305,13 +309,8 @@ def select_meal_candidates(pantry_payload: list[dict]):
 	return MEAL_TEMPLATES, 'templates', error
 
 
-@api_view(['GET'])
-def meal_suggestions(request):
-	pantry_items = PantryItem.objects.filter(user=request.user)
-	urgent_items = build_urgent_items(pantry_items)
-	urgent_names = {normalize(item['name']) for item in urgent_items if item['urgency_score'] >= 60}
-
-	pantry_payload = [
+def build_pantry_payload(pantry_items) -> list[dict]:
+	return [
 		{
 			'id': item.id,
 			'name': item.name,
@@ -324,8 +323,108 @@ def meal_suggestions(request):
 		for item in pantry_items
 	]
 
+
+def serialize_meal_set(meal_set: GeneratedMealSet) -> dict:
+	meals = {
+		'cook_today': [],
+		'cook_this_week': [],
+		'possible_later': [],
+	}
+
+	for meal in meal_set.meals.all():
+		payload = {
+			'id': meal.id,
+			'title': meal.title,
+			'description': meal.description,
+			'cuisine_type': meal.cuisine_type,
+			'estimated_cost': float(meal.estimated_cost),
+			'estimated_time_minutes': meal.estimated_time_minutes,
+			'ingredients': meal.ingredients or [],
+			'steps': meal.steps or [],
+			'matched_ingredients': meal.matched_ingredients or [],
+			'missing_ingredients': meal.missing_ingredients or [],
+			'substitutions': meal.substitutions or {},
+			'match_score': meal.match_score,
+			'source': meal_set.source,
+		}
+		meals.setdefault(meal.category, []).append(payload)
+
+	for key in meals:
+		meals[key] = sorted(meals[key], key=meal_rank)
+
+	return meals
+
+
+def week_start_date(current_date: date | None = None) -> date:
+	current_date = current_date or timezone.localdate()
+	return current_date - timedelta(days=current_date.weekday())
+
+
+def persist_meal_set(user, pantry_hash: str, source: str, meals: dict) -> GeneratedMealSet:
+	invalidate_meals(user)
+	with transaction.atomic():
+		meal_set = GeneratedMealSet.objects.create(
+			user=user,
+			source=source,
+			pantry_hash=pantry_hash,
+			week_start=week_start_date(),
+			is_active=True,
+		)
+		meal_rows = []
+		for category, group in meals.items():
+			for meal in group:
+				estimated_cost = meal.get('estimated_cost')
+				if estimated_cost is None:
+					estimated_cost = 0
+				estimated_time = meal.get('estimated_time_minutes')
+				if estimated_time is None:
+					estimated_time = 0
+				meal_rows.append(
+					GeneratedMeal(
+						meal_set=meal_set,
+						title=meal.get('title', ''),
+						description=meal.get('description', ''),
+						cuisine_type=meal.get('cuisine_type', ''),
+						estimated_cost=Decimal(str(estimated_cost)),
+						estimated_time_minutes=int(estimated_time),
+						ingredients=meal.get('ingredients') or [],
+						steps=meal.get('steps') or [],
+						category=category,
+						match_score=meal.get('match_score', 0.0),
+						matched_ingredients=meal.get('matched_ingredients') or [],
+						missing_ingredients=meal.get('missing_ingredients') or [],
+						substitutions=meal.get('substitutions') or {},
+					)
+				)
+		GeneratedMeal.objects.bulk_create(meal_rows)
+
+	return meal_set
+
+
+@api_view(['GET'])
+def meal_suggestions(request):
+	pantry_items = PantryItem.objects.filter(user=request.user)
+	urgent_items = build_urgent_items(pantry_items)
+	urgent_names = {normalize(item['name']) for item in urgent_items if item['urgency_score'] >= 60}
+
+	meal_set, pantry_hash, pantry_changed = get_cached_meals(request.user)
+	if meal_set:
+		return Response(
+			{
+				'urgent_items': urgent_items,
+				'meals': serialize_meal_set(meal_set),
+				'source': meal_set.source,
+				'llm_error': None,
+				'generated_at': meal_set.created_at.isoformat(),
+				'cached': True,
+				'pantry_changed': False,
+			}
+		)
+
+	pantry_payload = build_pantry_payload(pantry_items)
 	meal_candidates, source, llm_error = select_meal_candidates(pantry_payload)
 	meals = build_meal_groups(pantry_payload, urgent_names, meal_candidates, source)
+	meal_set = persist_meal_set(request.user, pantry_hash, source, meals)
 
 	return Response(
 		{
@@ -333,7 +432,9 @@ def meal_suggestions(request):
 			'meals': meals,
 			'source': source,
 			'llm_error': llm_error,
-			'generated_at': timezone.now().isoformat(),
+			'generated_at': meal_set.created_at.isoformat(),
+			'cached': False,
+			'pantry_changed': pantry_changed,
 		}
 	)
 
@@ -344,21 +445,11 @@ def generate_meals(request):
 	urgent_items = build_urgent_items(pantry_items)
 	urgent_names = {normalize(item['name']) for item in urgent_items if item['urgency_score'] >= 60}
 
-	pantry_payload = [
-		{
-			'id': item.id,
-			'name': item.name,
-			'name_norm': normalize(item.name),
-			'category': item.category or '',
-			'quantity': str(item.quantity),
-			'unit': item.unit,
-			'expiry_date': item.expiry_date,
-		}
-		for item in pantry_items
-	]
-
+	pantry_payload = build_pantry_payload(pantry_items)
+	pantry_hash = compute_pantry_hash(request.user)
 	meal_candidates, source, llm_error = select_meal_candidates(pantry_payload)
 	meals = build_meal_groups(pantry_payload, urgent_names, meal_candidates, source)
+	meal_set = persist_meal_set(request.user, pantry_hash, source, meals)
 
 	return Response(
 		{
@@ -366,6 +457,8 @@ def generate_meals(request):
 			'meals': meals,
 			'source': source,
 			'llm_error': llm_error,
-			'generated_at': timezone.now().isoformat(),
+			'generated_at': meal_set.created_at.isoformat(),
+			'cached': False,
+			'pantry_changed': False,
 		}
 	)

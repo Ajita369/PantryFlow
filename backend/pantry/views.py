@@ -6,6 +6,8 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from meals.cache import invalidate_meals
+
 from .models import PantryItem
 from .serializers import PantryItemSerializer
 
@@ -31,6 +33,15 @@ class PantryItemViewSet(viewsets.ModelViewSet):
 
 	def perform_create(self, serializer):
 		serializer.save(user=self.request.user)
+		invalidate_meals(self.request.user)
+
+	def perform_update(self, serializer):
+		serializer.save()
+		invalidate_meals(self.request.user)
+
+	def perform_destroy(self, instance):
+		instance.delete()
+		invalidate_meals(self.request.user)
 
 	@action(detail=False, methods=['get'], url_path='expired')
 	def expired(self, request):

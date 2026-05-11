@@ -36,6 +36,8 @@ export type MealSuggestionsResponse = {
   source: string
   llm_error?: string | null
   generated_at: string
+  cached: boolean
+  pantry_changed?: boolean
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
