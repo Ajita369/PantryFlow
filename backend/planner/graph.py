@@ -7,14 +7,15 @@ from django.utils import timezone
 from langgraph.graph import END, StateGraph
 
 from ai_service.provider import generate_with_fallback
-from meals.views import build_meal_groups, build_urgent_items, normalize
+from meals.views import build_urgent_items, normalize
 from pantry.models import PantryItem
 from planning.models import WeeklyBudget
 from planning.views import (
     apply_budget,
-    build_shopping_candidates,
+    build_meal_shopping_candidates,
     calculate_totals,
     current_budget,
+    get_or_generate_meals_for_shopping,
 )
 
 
@@ -87,24 +88,13 @@ def compute_urgency(state: PlanState) -> PlanState:
 
 
 def decide_tasks(state: PlanState) -> PlanState:
-    tasks: list[str] = []
+    tasks: list[str] = ['meals', 'shopping']
     warnings: list[str] = []
 
     pantry_models = state['pantry_models']
-    urgent_names = state.get('urgent_names', set())
 
     if not pantry_models:
         warnings.append('Add pantry items to improve meal accuracy.')
-        tasks.append('shopping')
-    if urgent_names:
-        tasks.append('meals')
-
-    low_stock = any(item.quantity <= 1 for item in pantry_models)
-    if low_stock:
-        tasks.append('shopping')
-
-    if not tasks:
-        tasks = ['meals']
 
     return {'tasks': tasks, 'warnings': warnings}
 
@@ -114,8 +104,8 @@ def summarize_substitutions(meals: dict) -> list[dict]:
 
     for group in meals.values():
         for meal in group:
-            for missing in meal['missing_ingredients']:
-                options = meal['substitutions'].get(missing, [])
+            for missing in meal.get('missing_ingredients') or []:
+                options = (meal.get('substitutions') or {}).get(missing, [])
                 if missing not in substitution_map:
                     substitution_map[missing] = []
                 for option in options:
@@ -129,17 +119,7 @@ def summarize_substitutions(meals: dict) -> list[dict]:
 
 
 def build_meals(state: PlanState) -> PlanState:
-    if 'meals' not in state['tasks']:
-        return {
-            'meals': {
-                'cook_today': [],
-                'cook_this_week': [],
-                'possible_later': [],
-            },
-            'substitutions': [],
-        }
-
-    meals = build_meal_groups(state['pantry_payload'], state.get('urgent_names', set()))
+    meals = get_or_generate_meals_for_shopping(state['user'], state['pantry_models'])
     substitutions = summarize_substitutions(meals)
     return {'meals': meals, 'substitutions': substitutions}
 
@@ -161,11 +141,8 @@ def serialize_shopping_items(items: Iterable) -> list[dict]:
 
 
 def build_shopping(state: PlanState) -> PlanState:
-    if 'shopping' not in state['tasks']:
-        return {'shopping_items': [], 'shopping_totals': calculate_totals([], state['budget_model'])}
-
-    candidates = build_shopping_candidates(state['pantry_models'])
-    selected = apply_budget(candidates, state['budget_model'])
+    candidates = build_meal_shopping_candidates(state.get('meals', {}))
+    selected = apply_budget(candidates, state['budget_model'], preserve_order=True)
     totals = calculate_totals(selected, state['budget_model'])
     return {
         'shopping_items': serialize_shopping_items(selected),
@@ -176,18 +153,27 @@ def build_shopping(state: PlanState) -> PlanState:
 def build_explanation(state: PlanState) -> PlanState:
     urgent_count = len(state.get('urgent_items', []))
     shopping_count = len(state.get('shopping_items', []))
+    meal_count = sum(len(group) for group in state.get('meals', {}).values())
     tasks = ', '.join(state.get('tasks', []))
+    budget = state.get('budget')
+    shopping_totals = state.get('shopping_totals', {})
+    budget_amount = budget.get('weekly_budget_amount') if budget else None
+    budget_remaining = shopping_totals.get('budget_remaining')
     fallback = (
-        f"Plan focuses on {tasks}."
-        f" {urgent_count} urgent items and {shopping_count} shopping items identified."
+        f"Plan focuses on {meal_count} meal recommendations and {shopping_count} meal-based shopping items."
+        f" {urgent_count} urgent pantry items are highlighted."
     )
+    if budget_amount is not None:
+        fallback += f" Budget remaining after selected shopping items: {budget_remaining}."
 
     prompt = (
         'Write a short weekly plan summary (2-3 sentences).\n'
         f"Tasks: {tasks}\n"
+        f"Meals: {meal_count}\n"
         f"Urgent items: {urgent_count}\n"
         f"Shopping items: {shopping_count}\n"
-        f"Budget: {state.get('budget')}\n"
+        f"Budget: {budget}\n"
+        f"Shopping totals: {shopping_totals}\n"
         'Keep it practical and avoid adding new items.'
     )
 

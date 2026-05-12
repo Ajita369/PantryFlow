@@ -1,5 +1,10 @@
-import { useState } from 'react'
-import { getWeeklyPlan, type PlanResponse, type ShoppingPlanItem } from '../api/plannerApi'
+import { useEffect, useState } from 'react'
+import {
+  generateWeeklyPlan,
+  getSavedWeeklyPlan,
+  type PlanResponse,
+  type ShoppingPlanItem,
+} from '../api/plannerApi'
 import type { MealSuggestion, UrgentItem } from '../api/mealsApi'
 
 const priorityLabel: Record<number, string> = {
@@ -106,14 +111,45 @@ function ShoppingTable({ items, currency }: { items: ShoppingPlanItem[]; currenc
 
 function Planner() {
   const [plan, setPlan] = useState<PlanResponse | null>(null)
+  const [loadingSaved, setLoadingSaved] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let ignore = false
+
+    async function loadSavedPlan() {
+      setLoadingSaved(true)
+      setError(null)
+      try {
+        const response = await getSavedWeeklyPlan()
+        if (!ignore) {
+          setPlan(response.plan)
+        }
+      } catch (err) {
+        if (!ignore) {
+          const message = err instanceof Error ? err.message : 'Failed to load saved plan.'
+          setError(message)
+        }
+      } finally {
+        if (!ignore) {
+          setLoadingSaved(false)
+        }
+      }
+    }
+
+    loadSavedPlan()
+
+    return () => {
+      ignore = true
+    }
+  }, [])
 
   const handleGenerate = async () => {
     setLoading(true)
     setError(null)
     try {
-      const response = await getWeeklyPlan()
+      const response = await generateWeeklyPlan()
       setPlan(response)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to build plan.'
@@ -139,16 +175,17 @@ function Planner() {
             <p className="muted">AI writes the summary. The plan logic stays rule-based.</p>
           </div>
           <div className="toolbar-group">
-            <button type="button" className="button" onClick={handleGenerate}>
+            <button type="button" className="button" onClick={handleGenerate} disabled={loading}>
               {loading ? 'Planning...' : 'Generate plan'}
             </button>
           </div>
         </div>
 
         {error ? <p className="status status-error">{error}</p> : null}
+        {loadingSaved ? <p className="status status-wait">Loading saved plan...</p> : null}
         {loading ? <p className="status status-wait">Building your plan...</p> : null}
 
-        {plan ? (
+        {!loadingSaved && plan ? (
           <>
             <div className="summary-row">
               <div className="summary-card">
@@ -261,9 +298,9 @@ function Planner() {
               </article>
             </div>
           </>
-        ) : (
+        ) : !loadingSaved ? (
           <p className="empty">Generate a plan to see your weekly lineup.</p>
-        )}
+        ) : null}
       </section>
     </section>
   )

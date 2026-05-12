@@ -31,6 +31,10 @@ export type PlanResponse = {
   explanation: AiResponse
 }
 
+export type SavedPlanResponse = {
+  plan: PlanResponse | null
+}
+
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const errorText = await response.text()
@@ -39,7 +43,18 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export async function getWeeklyPlan() {
+export async function getSavedWeeklyPlan() {
   const response = await authFetch('/api/plan-week/')
-  return handleResponse<PlanResponse>(response)
+  return handleResponse<SavedPlanResponse>(response)
+}
+
+export async function generateWeeklyPlan() {
+  const response = await authFetch('/api/plan-week/', {
+    method: 'POST',
+  })
+  const data = await handleResponse<SavedPlanResponse>(response)
+  if (!data.plan) {
+    throw new Error('Planner did not return a generated plan.')
+  }
+  return data.plan
 }
