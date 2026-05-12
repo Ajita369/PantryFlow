@@ -11,7 +11,6 @@ import {
   type MealSuggestionsResponse,
   type UrgentItem,
 } from '../api/mealsApi'
-import { addShoppingItems } from '../api/planningApi'
 
 type AiNoteState = {
   message?: string
@@ -25,20 +24,16 @@ type MealCardProps = {
   meal: MealSuggestion
   noteState?: AiNoteState
   substitutionState?: AiNoteState
-  shoppingState?: AiNoteState
   onMealNote: (meal: MealSuggestion) => void
   onSubstitutionNote: (meal: MealSuggestion) => void
-  onAddToShopping: (meal: MealSuggestion) => void
 }
 
 function MealCard({
   meal,
   noteState,
   substitutionState,
-  shoppingState,
   onMealNote,
   onSubstitutionNote,
-  onAddToShopping,
 }: MealCardProps) {
   return (
     <article className="meal-card">
@@ -103,20 +98,7 @@ function MealCard({
       ) : null}
       {meal.missing_ingredients.length ? (
         <div className="shopping-hint">
-          <p>Buy missing items from the Shopping List to complete this meal.</p>
-          <button
-            type="button"
-            className="button ghost"
-            onClick={() => onAddToShopping(meal)}
-            disabled={shoppingState?.loading}
-          >
-            {shoppingState?.loading ? 'Adding...' : 'Add missing to shopping list'}
-          </button>
-          {shoppingState?.error ? (
-            <span className="ai-status ai-error">{shoppingState.error}</span>
-          ) : shoppingState?.message ? (
-            <span className="ai-status">{shoppingState.message}</span>
-          ) : null}
+          <p>Generate the Shopping List to prioritize these missing items by meal timing and budget.</p>
         </div>
       ) : null}
       <details className="meal-steps">
@@ -200,7 +182,6 @@ function Meals() {
   const [error, setError] = useState<string | null>(null)
   const [mealNotes, setMealNotes] = useState<Record<number, AiNoteState>>({})
   const [subNotes, setSubNotes] = useState<Record<number, AiNoteState>>({})
-  const [shoppingNotes, setShoppingNotes] = useState<Record<number, AiNoteState>>({})
 
   const formatGeneratedAt = (value?: string) => {
     if (!value) {
@@ -286,19 +267,6 @@ function Meals() {
     }
   }
 
-  const addMissingItemsToShopping = async (meal: MealSuggestion) => {
-    updateNoteState(setShoppingNotes, meal.id, { loading: true })
-    try {
-      await addShoppingItems(meal.missing_ingredients)
-      updateNoteState(setShoppingNotes, meal.id, {
-        message: 'Added to Shopping List.',
-      })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Could not update shopping list.'
-      updateNoteState(setShoppingNotes, meal.id, { error: message })
-    }
-  }
-
   return (
     <section className="page">
       <div className="page-header">
@@ -375,10 +343,8 @@ function Meals() {
                 meal={meal}
                 noteState={mealNotes[meal.id]}
                 substitutionState={subNotes[meal.id]}
-                shoppingState={shoppingNotes[meal.id]}
                 onMealNote={requestMealNote}
                 onSubstitutionNote={requestSubNote}
-                onAddToShopping={addMissingItemsToShopping}
               />
             ))
           ) : (
@@ -397,10 +363,8 @@ function Meals() {
                 meal={meal}
                 noteState={mealNotes[meal.id]}
                 substitutionState={subNotes[meal.id]}
-                shoppingState={shoppingNotes[meal.id]}
                 onMealNote={requestMealNote}
                 onSubstitutionNote={requestSubNote}
-                onAddToShopping={addMissingItemsToShopping}
               />
             ))
           ) : (
@@ -419,10 +383,8 @@ function Meals() {
                 meal={meal}
                 noteState={mealNotes[meal.id]}
                 substitutionState={subNotes[meal.id]}
-                shoppingState={shoppingNotes[meal.id]}
                 onMealNote={requestMealNote}
                 onSubstitutionNote={requestSubNote}
-                onAddToShopping={addMissingItemsToShopping}
               />
             ))
           ) : (

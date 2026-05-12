@@ -9,6 +9,17 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from meals.cache import compute_pantry_hash, get_cached_meals
+from meals.views import (
+	build_pantry_payload,
+	build_meal_groups,
+	build_urgent_items,
+	INGREDIENT_CATEGORY_MAP,
+	normalize,
+	persist_meal_set,
+	select_meal_candidates,
+	serialize_meal_set,
+)
 from pantry.models import PantryItem
 
 from .models import ShoppingListItem, WeeklyBudget
@@ -39,6 +50,20 @@ PERISHABLE_CATEGORIES = {
 
 DEFAULT_PRICE = Decimal('3.00')
 
+MEAL_GROUP_ORDER = ('cook_today', 'cook_this_week', 'possible_later')
+
+MEAL_GROUP_LABELS = {
+	'cook_today': 'cook today',
+	'cook_this_week': 'cook this week',
+	'possible_later': 'possible later',
+}
+
+MEAL_GROUP_PRIORITIES = {
+	'cook_today': ShoppingListItem.Priority.HIGH,
+	'cook_this_week': ShoppingListItem.Priority.MEDIUM,
+	'possible_later': ShoppingListItem.Priority.LOW,
+}
+
 
 def current_budget(user) -> WeeklyBudget | None:
 	return (
@@ -52,6 +77,11 @@ def estimate_price(category: str) -> Decimal:
 	if not category:
 		return DEFAULT_PRICE
 	return CATEGORY_PRICE_MAP.get(category.strip().lower(), DEFAULT_PRICE)
+
+
+def estimate_ingredient_price(name: str) -> Decimal:
+	category = INGREDIENT_CATEGORY_MAP.get(normalize(name), '')
+	return estimate_price(category)
 
 
 def priority_for_category(category: str) -> int:
@@ -142,21 +172,77 @@ def build_shopping_candidates(pantry_items: Iterable[PantryItem]):
 
 
 def apply_budget(
-	items: Iterable[ShoppingListItem], budget: WeeklyBudget | None
+	items: Iterable[ShoppingListItem],
+	budget: WeeklyBudget | None,
+	preserve_order: bool = False,
 ) -> list[ShoppingListItem]:
+	item_list = list(items)
 	if not budget:
-		return list(items)
+		return item_list
 
 	remaining = budget.weekly_budget_amount
 	selected: list[ShoppingListItem] = []
+	ordered_items = item_list
+	if not preserve_order:
+		ordered_items = sorted(item_list, key=lambda x: (x.priority, x.estimated_price))
 
-	for item in sorted(items, key=lambda x: (x.priority, x.estimated_price)):
+	for item in ordered_items:
 		line_cost = item.estimated_price * item.quantity
 		if line_cost <= remaining:
 			selected.append(item)
 			remaining -= line_cost
 
 	return selected
+
+
+def get_or_generate_meals_for_shopping(user, pantry_items: list[PantryItem]) -> dict:
+	meal_set, pantry_hash, _pantry_changed = get_cached_meals(user)
+	if meal_set:
+		return serialize_meal_set(meal_set)
+
+	urgent_items = build_urgent_items(pantry_items)
+	urgent_names = {
+		normalize(item['name'])
+		for item in urgent_items
+		if item['urgency_score'] >= 60
+	}
+	pantry_payload = build_pantry_payload(pantry_items)
+	meal_candidates, source, _llm_error = select_meal_candidates(pantry_payload)
+	meals = build_meal_groups(pantry_payload, urgent_names, meal_candidates, source)
+
+	persist_meal_set(user, pantry_hash or compute_pantry_hash(user), source, meals)
+	return meals
+
+
+def build_meal_shopping_candidates(meals: dict) -> list[ShoppingListItem]:
+	candidates: list[ShoppingListItem] = []
+	seen_names: set[str] = set()
+
+	for group_name in MEAL_GROUP_ORDER:
+		priority = MEAL_GROUP_PRIORITIES[group_name]
+		group_label = MEAL_GROUP_LABELS[group_name]
+		for meal in meals.get(group_name, []):
+			title = meal.get('title') or 'recommended meal'
+			for ingredient in meal.get('missing_ingredients') or []:
+				name = str(ingredient).strip()
+				normalized = normalize(name)
+				if not name or normalized in seen_names:
+					continue
+
+				seen_names.add(normalized)
+				candidates.append(
+					ShoppingListItem(
+						name=name,
+						estimated_price=estimate_ingredient_price(name),
+						quantity=Decimal('1.00'),
+						unit='item',
+						priority=priority,
+						is_needed=True,
+						reason=f'Needed for {group_label}: {title}.',
+					)
+				)
+
+	return candidates
 
 
 class BudgetView(APIView):
@@ -188,7 +274,7 @@ class ShoppingListViewSet(mixins.ListModelMixin, mixins.UpdateModelMixin, viewse
 	queryset = ShoppingListItem.objects.all()
 
 	def get_queryset(self):
-		return ShoppingListItem.objects.filter(user=self.request.user)
+		return ShoppingListItem.objects.filter(user=self.request.user).order_by('priority', 'id')
 
 	def list(self, request, *args, **kwargs):
 		items = self.get_queryset()
@@ -198,10 +284,11 @@ class ShoppingListViewSet(mixins.ListModelMixin, mixins.UpdateModelMixin, viewse
 
 	@action(detail=False, methods=['post'], url_path='generate')
 	def generate(self, request):
-		pantry_items = PantryItem.objects.filter(user=request.user)
+		pantry_items = list(PantryItem.objects.filter(user=request.user))
 		budget = current_budget(request.user)
-		candidates = build_shopping_candidates(pantry_items)
-		selected = apply_budget(candidates, budget)
+		meals = get_or_generate_meals_for_shopping(request.user, pantry_items)
+		candidates = build_meal_shopping_candidates(meals)
+		selected = apply_budget(candidates, budget, preserve_order=True)
 		for item in selected:
 			item.user = request.user
 

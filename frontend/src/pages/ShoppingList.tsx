@@ -108,7 +108,7 @@ function ShoppingList() {
     <section className="page">
       <div className="page-header">
         <h1>Shopping List</h1>
-        <p>Generate a prioritized list with estimated costs.</p>
+        <p>Generate meal-based groceries in the order they are needed.</p>
       </div>
 
       <section className="card">
@@ -116,18 +116,23 @@ function ShoppingList() {
           <div>
             <h2>Recommendations</h2>
             <p className="muted">
-              Budget-aware items based on pantry stock.
+              Missing ingredients from recommended meals, prioritized by dish timing and budget.
             </p>
           </div>
           <div className="toolbar-group">
-            <button type="button" className="button ghost" onClick={loadList}>
+            <button type="button" className="button ghost" onClick={loadList} disabled={loading}>
               Refresh
             </button>
-            <button type="button" className="button ghost" onClick={handleAiNotes}>
+            <button
+              type="button"
+              className="button ghost"
+              onClick={handleAiNotes}
+              disabled={aiLoading || items.length === 0}
+            >
               {aiLoading ? 'Loading notes...' : 'AI notes'}
             </button>
-            <button type="button" className="button" onClick={handleGenerate}>
-              Generate list
+            <button type="button" className="button" onClick={handleGenerate} disabled={loading}>
+              {loading ? 'Generating...' : 'Generate list'}
             </button>
           </div>
         </div>
@@ -158,7 +163,9 @@ function ShoppingList() {
         {loading ? <p className="status status-wait">Loading list...</p> : null}
 
         {!loading && items.length === 0 ? (
-          <p className="empty">No shopping items yet. Generate a list to start.</p>
+          <p className="empty">
+            No shopping items yet. Generate a list from recommended meals to start.
+          </p>
         ) : null}
 
         {items.length > 0 ? (
