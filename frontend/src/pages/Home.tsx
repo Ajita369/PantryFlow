@@ -1,31 +1,45 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { getDashboard, type DashboardResponse } from '../api/dashboardApi'
+import EmptyState from '../components/EmptyState'
 
-type HealthResponse = {
-  status: string
+function formatCurrency(amount: string | number | null | undefined, currency: string) {
+  if (amount === null || amount === undefined || amount === '') {
+    return '—'
+  }
+  const value = typeof amount === 'string' ? Number(amount) : amount
+  if (Number.isNaN(value)) {
+    return '—'
+  }
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 2,
+  }).format(value)
 }
 
 function Home() {
-  const [health, setHealth] = useState<HealthResponse | null>(null)
+  const [dashboard, setDashboard] = useState<DashboardResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let isMounted = true
 
-    fetch('/api/health/')
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error('Health check failed')
-        }
-        return response.json() as Promise<HealthResponse>
-      })
+    getDashboard()
       .then((data) => {
         if (isMounted) {
-          setHealth(data)
+          setDashboard(data)
         }
       })
       .catch((err: Error) => {
         if (isMounted) {
           setError(err.message)
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setLoading(false)
         }
       })
 
@@ -35,43 +49,140 @@ function Home() {
   }, [])
 
   return (
-    <section className="page">
-      <div className="page-header">
-        <h1>Welcome to PantryFlow</h1>
-        <p>
-          Track what you already have, plan meals around what is expiring, and
-          stay on budget with confident grocery decisions.
-        </p>
-      </div>
-
-      <div className="grid">
-        <article className="card">
-          <h2>Backend status</h2>
-          {error ? (
-            <p className="status status-error">{error}</p>
-          ) : health ? (
-            <p className="status status-ok">Status: {health.status}</p>
-          ) : (
-            <p className="status status-wait">Checking /api/health/...</p>
-          )}
-        </article>
-        <article className="card">
-          <h2>Today&apos;s focus</h2>
-          <p>See what is expiring soon and schedule meals around it.</p>
-        </article>
-        <article className="card">
-          <h2>Budget snapshot</h2>
-          <p>Set a weekly target and keep spending on track.</p>
-        </article>
-      </div>
-
-      <section className="callout">
+    <section className="page home-page">
+      <div className="page-header hero">
         <div>
-          <h2>Next step</h2>
-          <p>Head to Pantry to add items and start planning.</p>
+          <p className="eyebrow">Dashboard</p>
+          <h1>Plan smarter with what you already own.</h1>
+          <p>
+            PantryFlow highlights urgent items, quick wins, and budget signals so
+            you can cook with confidence.
+          </p>
         </div>
-        <div className="callout-accent">Phase 1 ready</div>
-      </section>
+      </div>
+
+      {error ? <p className="status status-error">{error}</p> : null}
+
+      {loading ? (
+        <div className="grid dashboard-grid">
+          <div className="card skeleton-card">
+            <div className="skeleton-line" />
+            <div className="skeleton-line wide" />
+          </div>
+          <div className="card skeleton-card">
+            <div className="skeleton-line" />
+            <div className="skeleton-line wide" />
+          </div>
+          <div className="card skeleton-card">
+            <div className="skeleton-line" />
+            <div className="skeleton-line wide" />
+          </div>
+          <div className="card skeleton-card">
+            <div className="skeleton-line" />
+            <div className="skeleton-line wide" />
+          </div>
+          <div className="card skeleton-card">
+            <div className="skeleton-line" />
+            <div className="skeleton-line wide" />
+          </div>
+        </div>
+      ) : dashboard ? (
+        <>
+          <div className="grid dashboard-grid">
+            <article className="card stat-card">
+              <p className="stat-label">Pantry items</p>
+              <p className="stat-value">{dashboard.pantry_count}</p>
+              <p className="muted">Items tracked right now.</p>
+            </article>
+            <article className="card stat-card">
+              <p className="stat-label">Expiring soon</p>
+              <p className="stat-value">{dashboard.expiring_soon_count}</p>
+              <p className="muted">Next 7 days.</p>
+            </article>
+            <article className="card stat-card">
+              <p className="stat-label">Meals ready</p>
+              <p className="stat-value">{dashboard.quick_meals.length}</p>
+              <p className="muted">Cook-today ideas.</p>
+            </article>
+            <article className="card stat-card">
+              <p className="stat-label">Budget remaining</p>
+              <p className="stat-value">
+                {formatCurrency(dashboard.budget_remaining, dashboard.currency)}
+              </p>
+              <p className="muted">
+                Budget total:{' '}
+                {formatCurrency(dashboard.budget_total, dashboard.currency)}
+              </p>
+            </article>
+            <article className="card stat-card">
+              <p className="stat-label">Shopping list</p>
+              <p className="stat-value">{dashboard.shopping_count}</p>
+              <p className="muted">Items still needed.</p>
+            </article>
+          </div>
+
+          <div className="grid dashboard-split">
+            <article className="card">
+              <h2>Urgent items</h2>
+              {dashboard.top_urgent_items.length ? (
+                <div className="urgent-grid">
+                  {dashboard.top_urgent_items.map((item) => (
+                    <div key={item.id} className="urgent-chip">
+                      <div>
+                        <strong>{item.name}</strong>
+                        <span className="muted">{item.category || 'Uncategorized'}</span>
+                      </div>
+                      <span
+                        className={`badge badge-${item.urgency_label
+                          .toLowerCase()
+                          .replace(' ', '-')}`}
+                      >
+                        {item.urgency_label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  title="No urgent items"
+                  message="Your pantry looks stable. Add more items to see urgency alerts."
+                  action={
+                    <Link to="/pantry" className="button ghost">
+                      Add pantry items
+                    </Link>
+                  }
+                />
+              )}
+            </article>
+            <article className="card">
+              <h2>Quick meals</h2>
+              {dashboard.quick_meals.length ? (
+                <ul className="quick-list">
+                  {dashboard.quick_meals.map((meal) => (
+                    <li key={meal.id}>
+                      <strong>{meal.title}</strong>
+                      <span>
+                        Match {Math.round(meal.match_score * 100)}% ·{' '}
+                        {meal.estimated_time_minutes} min
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <EmptyState
+                  title="No quick meals yet"
+                  message="Generate meals to populate quick-cook ideas."
+                  action={
+                    <Link to="/meals" className="button ghost">
+                      Generate meals
+                    </Link>
+                  }
+                />
+              )}
+            </article>
+          </div>
+        </>
+      ) : null}
     </section>
   )
 }

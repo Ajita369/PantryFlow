@@ -99,3 +99,14 @@ export async function updateShoppingItem(
   })
   return handleResponse<ShoppingListItem>(response)
 }
+
+export async function exportShoppingList(format: 'csv' | 'text' = 'csv') {
+  const response = await authFetch(`/api/shopping-list/export/?format=${format}`)
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(errorText || 'Export failed')
+  }
+  const blob = await response.blob()
+  const filename = format === 'csv' ? 'shopping-list.csv' : 'shopping-list.txt'
+  return { blob, filename }
+}

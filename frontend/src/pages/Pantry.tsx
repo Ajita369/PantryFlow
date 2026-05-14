@@ -6,6 +6,9 @@ import {
   updatePantryItem,
   type PantryItem,
 } from '../api/pantryApi'
+import EmptyState from '../components/EmptyState'
+import Toast from '../components/Toast'
+import { useToast } from '../hooks/useToast'
 
 type PantryFormState = {
   name: string
@@ -64,6 +67,8 @@ function Pantry() {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
   const [urgency, setUrgency] = useState<UrgencyFilter>('all')
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const { toast, showToast, clearToast } = useToast()
 
   const loadItems = async () => {
     setLoading(true)
@@ -86,6 +91,10 @@ function Pantry() {
     loadItems()
   }, [search, category])
 
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [items])
+
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       if (urgency === 'all') {
@@ -105,6 +114,16 @@ function Pantry() {
       return urgencyInfo.label === 'No expiry'
     })
   }, [items, urgency])
+
+  const categoryOptions = useMemo(() => {
+    const unique = new Set<string>()
+    items.forEach((item) => {
+      if (item.category) {
+        unique.add(item.category)
+      }
+    })
+    return Array.from(unique).sort((a, b) => a.localeCompare(b))
+  }, [items])
 
   const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = event.target
@@ -134,14 +153,17 @@ function Pantry() {
     try {
       if (editingId) {
         await updatePantryItem(editingId, payload)
+        showToast('Pantry item updated.', 'success')
       } else {
         await createPantryItem(payload)
+        showToast('Pantry item added.', 'success')
       }
       resetForm()
       await loadItems()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Save failed.'
       setError(message)
+      showToast(message, 'error')
     }
   }
 
@@ -168,9 +190,58 @@ function Pantry() {
     try {
       await deletePantryItem(item.id)
       await loadItems()
+      showToast('Pantry item deleted.', 'success')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Delete failed.'
       setError(message)
+      showToast(message, 'error')
+    }
+  }
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      if (filteredItems.length === 0) {
+        return new Set()
+      }
+      if (prev.size === filteredItems.length) {
+        return new Set()
+      }
+      return new Set(filteredItems.map((item) => item.id))
+    })
+  }
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Delete ${selectedIds.size} selected item(s)?`
+    )
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await Promise.all(Array.from(selectedIds).map((id) => deletePantryItem(id)))
+      await loadItems()
+      showToast('Selected items deleted.', 'success')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Batch delete failed.'
+      setError(message)
+      showToast(message, 'error')
     }
   }
 
@@ -310,23 +381,81 @@ function Pantry() {
               </select>
             </label>
           </div>
-          <button type="button" className="button ghost" onClick={loadItems}>
-            Refresh
-          </button>
+          <div className="toolbar-group">
+            <button type="button" className="button ghost" onClick={loadItems}>
+              Refresh
+            </button>
+            <button
+              type="button"
+              className="button danger"
+              onClick={handleBatchDelete}
+              disabled={selectedIds.size === 0}
+            >
+              Delete selected ({selectedIds.size})
+            </button>
+          </div>
         </div>
 
-        {error ? <p className="status status-error">{error}</p> : null}
-        {loading ? <p className="status status-wait">Loading pantry...</p> : null}
-
-        {!loading && filteredItems.length === 0 ? (
-          <p className="empty">No pantry items found yet.</p>
+        {categoryOptions.length ? (
+          <div className="chip-row">
+            <button
+              type="button"
+              className={category === '' ? 'chip chip-active' : 'chip'}
+              onClick={() => setCategory('')}
+            >
+              All
+            </button>
+            {categoryOptions.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={category === option ? 'chip chip-active' : 'chip'}
+                onClick={() => setCategory(option)}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
         ) : null}
 
-        {filteredItems.length > 0 ? (
+        {error ? <p className="status status-error">{error}</p> : null}
+        {loading ? (
+          <div className="skeleton-table">
+            <div className="skeleton-line wide" />
+            <div className="skeleton-line" />
+            <div className="skeleton-line" />
+            <div className="skeleton-line" />
+          </div>
+        ) : null}
+
+        {!loading && filteredItems.length === 0 ? (
+          <EmptyState
+            title="No pantry items yet"
+            message="Add your first ingredients to start tracking expiry dates."
+            action={
+              <button type="button" className="button" onClick={() => window.scrollTo(0, 0)}>
+                Add an item
+              </button>
+            }
+          />
+        ) : null}
+
+        {filteredItems.length > 0 && !loading ? (
           <div className="table-wrapper">
             <table className="table">
               <thead>
                 <tr>
+                  <th>
+                    <input
+                      type="checkbox"
+                      checked={
+                        selectedIds.size > 0 &&
+                        selectedIds.size === filteredItems.length
+                      }
+                      onChange={toggleSelectAll}
+                      aria-label="Select all items"
+                    />
+                  </th>
                   <th>Name</th>
                   <th>Quantity</th>
                   <th>Category</th>
@@ -341,6 +470,14 @@ function Pantry() {
                   const urgencyInfo = getUrgencyLabel(item)
                   return (
                     <tr key={item.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(item.id)}
+                          onChange={() => toggleSelect(item.id)}
+                          aria-label={`Select ${item.name}`}
+                        />
+                      </td>
                       <td>{item.name}</td>
                       <td>
                         {item.quantity} {item.unit}
@@ -377,6 +514,7 @@ function Pantry() {
           </div>
         ) : null}
       </section>
+      <Toast toast={toast} onClose={clearToast} />
     </section>
   )
 }

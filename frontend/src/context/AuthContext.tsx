@@ -112,7 +112,10 @@ export function RequireAuth() {
   if (isLoading) {
     return (
       <section className="page">
-        <p className="status status-wait">Checking session...</p>
+        <div className="skeleton-block">
+          <div className="skeleton-line wide" />
+          <div className="skeleton-line" />
+        </div>
       </section>
     )
   }

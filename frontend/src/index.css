@@ -1,13 +1,16 @@
 :root {
-  --paper: #f9f6f0;
-  --ink: #1f1b16;
-  --ink-strong: #12100c;
-  --muted: #6d6254;
-  --accent: #d47937;
-  --accent-soft: rgba(212, 121, 55, 0.18);
-  --shadow: 0 12px 24px rgba(32, 24, 12, 0.08);
-  --font-body: 'Trebuchet MS', 'Gill Sans', 'Calibri', sans-serif;
-  --font-heading: 'Georgia', 'Garamond', 'Times New Roman', serif;
+  --paper: #f7f3ea;
+  --ink: #201b14;
+  --ink-strong: #120e0a;
+  --muted: #6c5f52;
+  --accent: #c96a3b;
+  --accent-soft: rgba(201, 106, 59, 0.18);
+  --accent-contrast: #5d7a6b;
+  --panel: rgba(255, 255, 255, 0.78);
+  --shadow: 0 12px 24px rgba(32, 24, 12, 0.1);
+  --shadow-strong: 0 18px 36px rgba(26, 18, 10, 0.16);
+  --font-body: 'Trebuchet MS', 'Lucida Grande', 'Segoe UI', sans-serif;
+  --font-heading: 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
   --font-mono: 'Consolas', 'Courier New', monospace;
 
   font-family: var(--font-body);
@@ -23,7 +26,20 @@
 body {
   margin: 0;
   min-height: 100svh;
-  background: radial-gradient(circle at top, #fdf8ef, #f5efe3 45%, #efe7d7 100%);
+  position: relative;
+  background: radial-gradient(circle at top, #fdf8f0, #f3ece0 45%, #eee4d4 100%);
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: -20% -20% auto auto;
+  width: 360px;
+  height: 360px;
+  background: radial-gradient(circle, rgba(93, 122, 107, 0.18), transparent 70%);
+  filter: blur(1px);
+  z-index: -1;
 }
 
 #root {

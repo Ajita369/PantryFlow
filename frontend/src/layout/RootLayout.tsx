@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -13,9 +14,14 @@ const navItems = [
 function RootLayout() {
   const { user, isAuthenticated, logout } = useAuth()
   const displayName = user?.display_name || user?.first_name || user?.email
+  const [navOpen, setNavOpen] = useState(false)
 
   const handleLogout = async () => {
     await logout()
+  }
+
+  const toggleNav = () => {
+    setNavOpen((prev) => !prev)
   }
 
   return (
@@ -28,7 +34,20 @@ function RootLayout() {
             <p className="brand-subtitle">AI Pantry Waste Reducer</p>
           </div>
         </div>
-        <nav className="app-nav">
+        <button
+          type="button"
+          className={navOpen ? 'nav-toggle nav-toggle-open' : 'nav-toggle'}
+          onClick={toggleNav}
+          aria-expanded={navOpen}
+          aria-controls="primary-navigation"
+        >
+          <span className="nav-toggle-label">Menu</span>
+          <span className="nav-toggle-bars" />
+        </button>
+        <nav
+          id="primary-navigation"
+          className={navOpen ? 'app-nav app-nav-open' : 'app-nav'}
+        >
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -37,6 +56,7 @@ function RootLayout() {
               className={({ isActive }) =>
                 isActive ? 'nav-link nav-link-active' : 'nav-link'
               }
+              onClick={() => setNavOpen(false)}
             >
               {item.label}
             </NavLink>

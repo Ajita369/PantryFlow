@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
 import { getShoppingNotes, type AiResponse } from '../api/aiApi'
 import {
+  exportShoppingList,
   generateShoppingList,
   getShoppingList,
   updateShoppingItem,
   type ShoppingListItem,
   type ShoppingTotals,
 } from '../api/planningApi'
+import EmptyState from '../components/EmptyState'
+import Toast from '../components/Toast'
+import { useToast } from '../hooks/useToast'
 
 const priorityLabel: Record<number, string> = {
   1: 'High',
@@ -37,6 +41,7 @@ function ShoppingList() {
   const [aiNote, setAiNote] = useState<AiResponse | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
+  const { toast, showToast, clearToast } = useToast()
 
   const loadList = async () => {
     setLoading(true)
@@ -66,9 +71,11 @@ function ShoppingList() {
       const response = await generateShoppingList()
       setItems(response.items)
       setTotals(response.totals)
+      showToast('Shopping list updated.', 'success')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Generate failed.'
       setError(message)
+      showToast(message, 'error')
     } finally {
       setLoading(false)
     }
@@ -82,9 +89,11 @@ function ShoppingList() {
           entry.id === item.id ? { ...entry, is_needed: !entry.is_needed } : entry
         )
       )
+      showToast('Shopping list updated.', 'success')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Update failed.'
       setError(message)
+      showToast(message, 'error')
     }
   }
 
@@ -99,6 +108,25 @@ function ShoppingList() {
       setAiError(message)
     } finally {
       setAiLoading(false)
+    }
+  }
+
+  const handleExport = async (format: 'csv' | 'text') => {
+    try {
+      const { blob, filename } = await exportShoppingList(format)
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      showToast('Shopping list exported.', 'success')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Export failed.'
+      setError(message)
+      showToast(message, 'error')
     }
   }
 
@@ -123,6 +151,24 @@ function ShoppingList() {
             <button type="button" className="button ghost" onClick={loadList} disabled={loading}>
               Refresh
             </button>
+            <div className="button-group">
+              <button
+                type="button"
+                className="button ghost"
+                onClick={() => handleExport('csv')}
+                disabled={items.length === 0}
+              >
+                Export CSV
+              </button>
+              <button
+                type="button"
+                className="button ghost"
+                onClick={() => handleExport('text')}
+                disabled={items.length === 0}
+              >
+                Export text
+              </button>
+            </div>
             <button
               type="button"
               className="button ghost"
@@ -160,15 +206,29 @@ function ShoppingList() {
         ) : null}
 
         {error ? <p className="status status-error">{error}</p> : null}
-        {loading ? <p className="status status-wait">Loading list...</p> : null}
 
-        {!loading && items.length === 0 ? (
-          <p className="empty">
-            No shopping items yet. Generate a list from recommended meals to start.
-          </p>
+        {loading ? (
+          <div className="skeleton-table">
+            <div className="skeleton-line wide" />
+            <div className="skeleton-line" />
+            <div className="skeleton-line" />
+            <div className="skeleton-line" />
+          </div>
         ) : null}
 
-        {items.length > 0 ? (
+        {!loading && items.length === 0 ? (
+          <EmptyState
+            title="Nothing in the cart yet"
+            message="Generate a list from recommended meals to start planning purchases."
+            action={
+              <button type="button" className="button" onClick={handleGenerate}>
+                Generate list
+              </button>
+            }
+          />
+        ) : null}
+
+        {items.length > 0 && !loading ? (
           <div className="table-wrapper">
             <table className="table">
               <thead>
@@ -184,7 +244,7 @@ function ShoppingList() {
                 {items.map((item) => {
                   const label = priorityLabel[item.priority] ?? 'Medium'
                   return (
-                    <tr key={item.id}>
+                    <tr key={item.id} className={item.is_needed ? '' : 'row-muted'}>
                       <td>
                         <div className="item-name">
                           {item.name}
@@ -217,6 +277,7 @@ function ShoppingList() {
           </div>
         ) : null}
       </section>
+      <Toast toast={toast} onClose={clearToast} />
     </section>
   )
 }

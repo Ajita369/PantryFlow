@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import csv
 from decimal import Decimal
 from typing import Iterable
 
+from django.http import HttpResponse
 from django.db import transaction
 from rest_framework import mixins, viewsets
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -340,3 +342,41 @@ class ShoppingListViewSet(mixins.ListModelMixin, mixins.UpdateModelMixin, viewse
 		serializer = self.get_serializer(items, many=True)
 		totals = calculate_totals(items, current_budget(request.user))
 		return Response({'items': serializer.data, 'totals': totals})
+
+
+@api_view(['GET'])
+def export_shopping_list(request):
+	format_param = request.query_params.get('format', 'csv').strip().lower()
+	items = ShoppingListItem.objects.filter(user=request.user).order_by('priority', 'id')
+
+	if format_param == 'text':
+		lines = []
+		for item in items:
+			status = 'needed' if item.is_needed else 'bought'
+			lines.append(
+				f"- {item.name} ({item.quantity} {item.unit}) "
+				f"{item.estimated_price} [{status}]"
+			)
+		payload = '\n'.join(lines) if lines else 'No shopping items yet.'
+		return HttpResponse(payload, content_type='text/plain')
+
+	response = HttpResponse(content_type='text/csv')
+	response['Content-Disposition'] = 'attachment; filename="shopping-list.csv"'
+	writer = csv.writer(response)
+	writer.writerow(
+		['Item', 'Quantity', 'Unit', 'Priority', 'Estimated', 'Needed', 'Reason']
+	)
+	for item in items:
+		writer.writerow(
+			[
+				item.name,
+				str(item.quantity),
+				item.unit,
+				item.priority,
+				str(item.estimated_price),
+				'yes' if item.is_needed else 'no',
+				item.reason,
+			]
+		)
+
+	return response

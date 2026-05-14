@@ -6,6 +6,7 @@ import {
   type ShoppingPlanItem,
 } from '../api/plannerApi'
 import type { MealSuggestion, UrgentItem } from '../api/mealsApi'
+import EmptyState from '../components/EmptyState'
 
 const priorityLabel: Record<number, string> = {
   1: 'High',
@@ -68,7 +69,12 @@ function MealGroup({ title, meals }: { title: string; meals: MealSuggestion[] })
 
 function ShoppingTable({ items, currency }: { items: ShoppingPlanItem[]; currency: string }) {
   if (!items.length) {
-    return <p className="muted">No shopping items suggested.</p>
+    return (
+      <EmptyState
+        title="No shopping suggestions"
+        message="Generate a plan to see what to buy this week."
+      />
+    )
   }
 
   return (
@@ -182,8 +188,25 @@ function Planner() {
         </div>
 
         {error ? <p className="status status-error">{error}</p> : null}
-        {loadingSaved ? <p className="status status-wait">Loading saved plan...</p> : null}
-        {loading ? <p className="status status-wait">Building your plan...</p> : null}
+        {loadingSaved || loading ? (
+          <div className="skeleton-block">
+            <div className="skeleton-line wide" />
+            <div className="skeleton-line" />
+            <div className="skeleton-line" />
+          </div>
+        ) : null}
+
+        {!loadingSaved && !loading && !plan ? (
+          <EmptyState
+            title="No plan saved"
+            message="Generate a weekly plan to see meals, shopping, and urgency insights."
+            action={
+              <button type="button" className="button" onClick={handleGenerate}>
+                Generate plan
+              </button>
+            }
+          />
+        ) : null}
 
         {!loadingSaved && plan ? (
           <>
@@ -240,7 +263,10 @@ function Planner() {
                     ))}
                   </div>
                 ) : (
-                  <p className="muted">No urgent items right now.</p>
+                  <EmptyState
+                    title="No urgent items"
+                    message="Your pantry looks stable. Add more items to track urgency."
+                  />
                 )}
               </article>
 
@@ -298,8 +324,6 @@ function Planner() {
               </article>
             </div>
           </>
-        ) : !loadingSaved ? (
-          <p className="empty">Generate a plan to see your weekly lineup.</p>
         ) : null}
       </section>
     </section>

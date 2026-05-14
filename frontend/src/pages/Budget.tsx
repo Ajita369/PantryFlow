@@ -6,6 +6,9 @@ import {
   type ShoppingTotals,
   type WeeklyBudget,
 } from '../api/planningApi'
+import EmptyState from '../components/EmptyState'
+import Toast from '../components/Toast'
+import { useToast } from '../hooks/useToast'
 
 type BudgetFormState = {
   weekly_budget_amount: string
@@ -37,8 +40,10 @@ function Budget() {
   const [totals, setTotals] = useState<ShoppingTotals | null>(null)
   const [formState, setFormState] = useState<BudgetFormState>(initialForm)
   const [loading, setLoading] = useState(false)
+  const [loadingView, setLoadingView] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const { toast, showToast, clearToast } = useToast()
 
   const loadBudget = async () => {
     try {
@@ -66,8 +71,21 @@ function Budget() {
   }
 
   useEffect(() => {
-    loadBudget()
-    loadTotals()
+    let isMounted = true
+
+    async function loadAll() {
+      setLoadingView(true)
+      await Promise.all([loadBudget(), loadTotals()])
+      if (isMounted) {
+        setLoadingView(false)
+      }
+    }
+
+    loadAll()
+
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -94,10 +112,12 @@ function Budget() {
       })
       setBudget(response.budget)
       setNotice('Budget updated.')
+      showToast('Budget saved.', 'success')
       await loadTotals()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save budget.'
       setError(message)
+      showToast(message, 'error')
     } finally {
       setLoading(false)
     }
@@ -113,33 +133,48 @@ function Budget() {
       </div>
 
       <div className="grid stats-grid">
-        <article className="card">
-          <h2>Weekly budget</h2>
-          <p className="stat-value">
-            {budget
-              ? formatCurrency(budget.weekly_budget_amount, currency)
-              : 'Not set'}
-          </p>
-          {budget ? (
-            <p className="muted">
-              {budget.week_start_date} to {budget.week_end_date}
-            </p>
-          ) : null}
-        </article>
-        <article className="card">
-          <h2>Estimated spend</h2>
-          <p className="stat-value">
-            {formatCurrency(totals?.total_estimated_cost, currency)}
-          </p>
-          <p className="muted">From the current shopping list.</p>
-        </article>
-        <article className="card">
-          <h2>Budget remaining</h2>
-          <p className="stat-value">
-            {formatCurrency(totals?.budget_remaining, currency)}
-          </p>
-          <p className="muted">Update the list to refresh this number.</p>
-        </article>
+        {loadingView ? (
+          <>
+            <article className="card skeleton-card" />
+            <article className="card skeleton-card" />
+            <article className="card skeleton-card" />
+          </>
+        ) : (
+          <>
+            <article className="card">
+              <h2>Weekly budget</h2>
+              {budget ? (
+                <>
+                  <p className="stat-value">
+                    {formatCurrency(budget.weekly_budget_amount, currency)}
+                  </p>
+                  <p className="muted">
+                    {budget.week_start_date} to {budget.week_end_date}
+                  </p>
+                </>
+              ) : (
+                <EmptyState
+                  title="No budget yet"
+                  message="Set a weekly target to track spending."
+                />
+              )}
+            </article>
+            <article className="card">
+              <h2>Estimated spend</h2>
+              <p className="stat-value">
+                {formatCurrency(totals?.total_estimated_cost, currency)}
+              </p>
+              <p className="muted">From the current shopping list.</p>
+            </article>
+            <article className="card">
+              <h2>Budget remaining</h2>
+              <p className="stat-value">
+                {formatCurrency(totals?.budget_remaining, currency)}
+              </p>
+              <p className="muted">Update the list to refresh this number.</p>
+            </article>
+          </>
+        )}
       </div>
 
       <section className="card">
@@ -177,6 +212,7 @@ function Budget() {
           {error ? <p className="status status-error">{error}</p> : null}
         </form>
       </section>
+      <Toast toast={toast} onClose={clearToast} />
     </section>
   )
 }
