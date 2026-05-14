@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { getDashboard, type DashboardResponse } from '../api/dashboardApi'
 import EmptyState from '../components/EmptyState'
+import heroImage from '../assets/hero.png'
 
 function formatCurrency(amount: string | number | null | undefined, currency: string) {
   if (amount === null || amount === undefined || amount === '') {
@@ -22,6 +23,9 @@ function Home() {
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const heroStyle = {
+    '--hero-image': `url(${heroImage})`,
+  } as CSSProperties
 
   useEffect(() => {
     let isMounted = true
@@ -50,14 +54,18 @@ function Home() {
 
   return (
     <section className="page home-page">
-      <div className="page-header hero">
-        <div>
+      <div className="page-header hero hero-banner" style={heroStyle}>
+        <div className="hero-content">
           <p className="eyebrow">Dashboard</p>
-          <h1>Plan smarter with what you already own.</h1>
-          <p>
+          <h1 className="hero-title">Plan smarter with what you already own.</h1>
+          <p className="hero-subtitle">
             PantryFlow highlights urgent items, quick wins, and budget signals so
             you can cook with confidence.
           </p>
+          <div className="hero-meta">
+            <span>Fresh insights · Zero waste focus</span>
+            <span>Updated weekly</span>
+          </div>
         </div>
       </div>
 

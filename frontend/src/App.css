@@ -29,11 +29,14 @@
   white-space: nowrap;
 }
 
+.auth-link {
   padding: 8px 14px;
   border-radius: 999px;
   border: 1px solid rgba(0, 0, 0, 0.12);
   color: var(--ink);
   background: rgba(255, 255, 255, 0.6);
+  text-decoration: none;
+  font-size: 13px;
 }
 
 .auth-link-primary {
@@ -200,9 +203,63 @@
 
 .hero {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
   gap: 24px;
+}
+
+.hero-banner {
+  position: relative;
+  padding: 48px;
+  border-radius: 28px;
+  color: #fdf6ec;
+  background-image: linear-gradient(
+    120deg,
+    rgba(10, 8, 6, 0.65),
+    rgba(10, 8, 6, 0.28)
+  ),
+  var(--hero-image);
+  background-size: cover;
+  background-position: center;
+  box-shadow: var(--shadow-strong);
+  overflow: hidden;
+}
+
+.hero-content {
+  max-width: 640px;
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: 18px;
+  background: rgba(10, 8, 6, 0.35);
+  backdrop-filter: blur(4px);
+}
+
+.hero-title {
+  margin: 0;
+  font-size: clamp(36px, 4.2vw, 56px);
+  line-height: 1.05;
+  letter-spacing: -0.5px;
+  color: #fdf6ec;
+  text-shadow: 0 10px 24px rgba(10, 8, 6, 0.55);
+}
+
+.hero-subtitle {
+  margin: 0;
+  color: rgba(253, 246, 236, 0.9);
+  font-size: 16px;
+  max-width: 520px;
+  text-shadow: 0 8px 18px rgba(10, 8, 6, 0.45);
+}
+
+.hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 12px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: rgba(253, 246, 236, 0.8);
 }
 
 .eyebrow {
@@ -210,7 +267,7 @@
   text-transform: uppercase;
   letter-spacing: 2px;
   font-size: 11px;
-  color: var(--muted);
+  color: rgba(253, 246, 236, 0.78);
 }
 
 .hero-actions {
@@ -496,7 +553,7 @@
 }
 
 .dashboard-grid {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
 }
 
 .dashboard-split {
@@ -1082,11 +1139,23 @@
     flex-direction: column;
     align-items: flex-start;
   }
+
+  .hero-banner {
+    padding: 32px;
+  }
 }
 
 @media (max-width: 600px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
   .empty-state {
     grid-template-columns: 1fr;
+  }
+
+  .hero-banner {
+    padding: 24px;
   }
 
   .toast {
