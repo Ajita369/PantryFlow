@@ -58,6 +58,8 @@
 - Quick meal suggestions for today
 - Shopping list count and budget status
 
+link : https://pantry-flow-one.vercel.app/
+
 ---
 
 ## 🏗️ Tech Stack
