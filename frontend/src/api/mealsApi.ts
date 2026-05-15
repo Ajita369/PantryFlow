@@ -1,4 +1,4 @@
-import { authFetch } from './authApi'
+import { authFetch, getApiBase } from './authApi'
 
 export type UrgentItem = {
   id: number
@@ -49,12 +49,12 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export async function getMealSuggestions() {
-  const response = await authFetch('/api/meals/suggestions/')
+  const response = await authFetch(`${getApiBase()}/api/meals/suggestions/`)
   return handleResponse<MealSuggestionsResponse>(response)
 }
 
 export async function generateMeals() {
-  const response = await authFetch('/api/meals/generate/', {
+  const response = await authFetch(`${getApiBase()}/api/meals/generate/`, {
     method: 'POST',
   })
   return handleResponse<MealSuggestionsResponse>(response)

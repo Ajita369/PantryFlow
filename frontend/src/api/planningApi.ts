@@ -1,4 +1,4 @@
-import { authFetch } from './authApi'
+import { authFetch, getApiBase } from './authApi'
 
 export type WeeklyBudget = {
   id: number
@@ -54,12 +54,12 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export async function getBudget() {
-  const response = await authFetch('/api/budget/')
+  const response = await authFetch(`${getApiBase()}/api/budget/`)
   return handleResponse<BudgetResponse>(response)
 }
 
 export async function saveBudget(payload: BudgetInput) {
-  const response = await authFetch('/api/budget/', {
+  const response = await authFetch(`${getApiBase()}/api/budget/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -68,19 +68,19 @@ export async function saveBudget(payload: BudgetInput) {
 }
 
 export async function getShoppingList() {
-  const response = await authFetch('/api/shopping-list/')
+  const response = await authFetch(`${getApiBase()}/api/shopping-list/`)
   return handleResponse<ShoppingListResponse>(response)
 }
 
 export async function generateShoppingList() {
-  const response = await authFetch('/api/shopping-list/generate/', {
+  const response = await authFetch(`${getApiBase()}/api/shopping-list/generate/`, {
     method: 'POST',
   })
   return handleResponse<ShoppingListResponse>(response)
 }
 
 export async function addShoppingItems(items: string[]) {
-  const response = await authFetch('/api/shopping-list/add-items/', {
+  const response = await authFetch(`${getApiBase()}/api/shopping-list/add-items/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ items }),
@@ -92,7 +92,7 @@ export async function updateShoppingItem(
   id: number,
   payload: Partial<Pick<ShoppingListItem, 'is_needed' | 'priority'>>
 ) {
-  const response = await authFetch(`/api/shopping-list/${id}/`, {
+  const response = await authFetch(`${getApiBase()}/api/shopping-list/${id}/`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -101,7 +101,7 @@ export async function updateShoppingItem(
 }
 
 export async function exportShoppingList(format: 'csv' | 'text' = 'csv') {
-  const response = await authFetch(`/api/shopping-list/export/?format=${format}`)
+  const response = await authFetch(`${getApiBase()}/api/shopping-list/export/?format=${format}`)
   if (!response.ok) {
     const errorText = await response.text()
     throw new Error(errorText || 'Export failed')

@@ -1,4 +1,4 @@
-import { authFetch } from './authApi'
+import { authFetch, getApiBase } from './authApi'
 
 export type PantryItem = {
   id: number
@@ -30,7 +30,7 @@ type PantryListFilters = {
   category?: string
 }
 
-const baseUrl = '/api/pantry-items/'
+const baseUrl = `${getApiBase()}/api/pantry-items/`
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {

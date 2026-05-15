@@ -1,3 +1,11 @@
+// In production the frontend (Vercel) and backend (Render) are on different origins.
+// Set VITE_API_BASE_URL in Vercel's environment variables to your Render backend URL, e.g.:
+//   https://pantryflow-api.onrender.com
+// In development leave it unset - the Vite proxy forwards /api/* to localhost:8000.
+export function getApiBase(): string {
+  return (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
+}
+
 export type AuthTokens = {
   access: string
   refresh: string
@@ -106,7 +114,7 @@ async function refreshAccessToken() {
     return null
   }
 
-  const response = await fetch('/api/auth/refresh/', {
+  const response = await fetch(`${getApiBase()}/api/auth/refresh/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh }),
@@ -161,7 +169,7 @@ export async function authFetch(input: RequestInfo | URL, init: RequestInit = {}
 }
 
 export async function register(payload: RegisterPayload) {
-  const response = await fetch('/api/auth/register/', {
+  const response = await fetch(`${getApiBase()}/api/auth/register/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -172,7 +180,7 @@ export async function register(payload: RegisterPayload) {
 }
 
 export async function login(payload: LoginPayload) {
-  const response = await fetch('/api/auth/login/', {
+  const response = await fetch(`${getApiBase()}/api/auth/login/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -190,7 +198,7 @@ export async function logout() {
     return
   }
 
-  const response = await authFetch('/api/auth/logout/', {
+  const response = await authFetch(`${getApiBase()}/api/auth/logout/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh }),
@@ -206,6 +214,6 @@ export async function logout() {
 }
 
 export async function getMe() {
-  const response = await authFetch('/api/auth/me/')
+  const response = await authFetch(`${getApiBase()}/api/auth/me/`)
   return handleResponse<AuthUser>(response)
 }

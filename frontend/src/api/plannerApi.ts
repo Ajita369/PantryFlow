@@ -1,5 +1,5 @@
 import type { AiResponse } from './aiApi'
-import { authFetch } from './authApi'
+import { authFetch, getApiBase } from './authApi'
 import type { MealSuggestion, UrgentItem } from './mealsApi'
 import type { ShoppingTotals, WeeklyBudget } from './planningApi'
 
@@ -44,12 +44,12 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export async function getSavedWeeklyPlan() {
-  const response = await authFetch('/api/plan-week/')
+  const response = await authFetch(`${getApiBase()}/api/plan-week/`)
   return handleResponse<SavedPlanResponse>(response)
 }
 
 export async function generateWeeklyPlan() {
-  const response = await authFetch('/api/plan-week/', {
+  const response = await authFetch(`${getApiBase()}/api/plan-week/`, {
     method: 'POST',
   })
   const data = await handleResponse<SavedPlanResponse>(response)

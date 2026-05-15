@@ -1,4 +1,4 @@
-import { authFetch } from './authApi'
+import { authFetch, getApiBase } from './authApi'
 
 export type DashboardUrgentItem = {
   id: number
@@ -39,6 +39,6 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export async function getDashboard() {
-  const response = await authFetch('/api/dashboard/')
+  const response = await authFetch(`${getApiBase()}/api/dashboard/`)
   return handleResponse<DashboardResponse>(response)
 }
